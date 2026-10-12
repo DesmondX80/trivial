@@ -1,0 +1,20 @@
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Node / React
+**/node_modules/
+**/build/
+**/dist/
+.env.local
+
+# Java / Spring Boot
+**/target/
+**/.gradle/
+**/build/
+*.jar
+
+# System
+.DS_Store
+Thumbs.db
