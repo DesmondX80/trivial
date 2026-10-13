@@ -3,15 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tactical Trivial Pursuit - Rintamahaarat</title>
+  <title>Tactical Trivial Pursuit - Rintamakartta</title>
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            command: {
+              base: '#0b0f19',
+              card: '#111827',
+              border: '#1f2937',
+              highlight: '#374151',
+            }
+          }
+        }
+      }
+    }
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
 
-  <!-- React 18 Production CDNs -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- React and Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
     body {
@@ -20,9 +41,36 @@
       font-family: 'Inter', sans-serif;
       overflow-x: hidden;
     }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #0f172a; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    .modal-animate-in {
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.96) translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
     .radar-grid {
       background-size: 32px 32px;
       background-image:
@@ -35,341 +83,639 @@
 
 <div id="root"></div>
 
-<script>
-  const { useState, createElement: e } = React;
+<script type="text/babel">
+  const { useState, useEffect } = React;
 
-  // Pelin datat ja kysymykset Esa Kujalan säännöillä
-  const NODE_TYPES = {
-    yellow: { name: 'Standardi', color: '#facc15', border: '#ca8a04', desc: 'Perusvisailu' },
-    red: { name: 'Chrono', color: '#f43f5e', border: '#be123c', desc: 'Järjestä tapahtumat' },
-    black: { name: 'Numerovisailu', color: '#1e293b', border: '#475569', textCol: '#cbd5e1', desc: 'Taktinen arvaus' }
+  const CATEGORY_DATA = {
+    yleistieto: { name: 'Yleistieto', color: '#38bdf8', bgClass: 'bg-sky-500', textClass: 'text-sky-400', borderClass: 'border-sky-500' },
+    historia: { name: 'Historia', color: '#facc15', bgClass: 'bg-amber-400', textClass: 'text-amber-300', borderClass: 'border-amber-400' },
+    maantieto: { name: 'Maantieto', color: '#2dd4bf', bgClass: 'bg-teal-400', textClass: 'text-teal-300', borderClass: 'border-teal-400' },
+    biologia: { name: 'Biologia', color: '#4ade80', bgClass: 'bg-emerald-400', textClass: 'text-emerald-300', borderClass: 'border-emerald-400' },
+    urheilu: { name: 'Urheilu', color: '#fb923c', bgClass: 'bg-orange-400', textClass: 'text-orange-400', borderClass: 'border-orange-400' },
   };
 
-  const SIZES = {
-    small: { name: 'Pieni', multiplier: 1, scale: 12 },
-    medium: { name: 'Keskikokoinen', multiplier: 2, scale: 16 },
-    large: { name: 'Iso', multiplier: 3, scale: 20 }
+  const generateBoardCells = () => {
+    const cells = [];
+    const totalCells = 18;
+    const categoryKeys = Object.keys(CATEGORY_DATA);
+
+    const startY = 700;
+    const endY = 80;
+    const heightStep = (startY - endY) / (totalCells - 1);
+    const centerX = 240;
+    const amplitude = 120;
+
+    for (let i = 0; i < totalCells; i++) {
+      const y = startY - i * heightStep;
+      const x = centerX + Math.sin(i * 0.65) * amplitude;
+      const category = categoryKeys[i % categoryKeys.length];
+      const isCheckpoint = i === 0 || i === Math.floor(totalCells / 2) || i === totalCells - 1;
+
+      cells.push({
+        id: i + 1,
+        category,
+        x,
+        y,
+        isCheckpoint
+      });
+    }
+    return cells;
   };
 
-  // Tehtäväpankki
-  const QUESTIONS_BANK = {
-    yellow: [
-      { q: 'Mikä on Suomen valtiosäännön mukainen pääkaupunki?', options: ['Turku', 'Helsinki', 'Tampere', 'Oulu'], correct: 1 },
-      { q: 'Mikä alkuaine on kullan kemiallinen merkki?', options: ['Ag', 'Fe', 'Au', 'Cu'], correct: 2 },
-      { q: 'Mikä maailman meri ympäröi Antarktikaa?', options: ['Eteläinen jäämeri', 'Atlantti', 'Intian valtameri', 'Tyynimeri'], correct: 0 },
-      { q: 'Kuinka monta kenttäpelaajaa on jääkiekkojoukkueella kentällä?', options: ['5', '6', '4', '7'], correct: 0 }
-    ],
-    red: [
-      { events: [{text: 'Suomen itsenäistyminen', year: 1917}, {text: 'Toinen maailmansota alkoi', year: 1939}]},
-      { events: [{text: 'Rooman valtakunta perustettiin', year: -753}, {text: 'Ranskan vallankumous', year: 1789}, {text: 'Berliinin muuri kaatui', year: 1989}]},
-      { events: [{text: 'Mika Waltarin Sinuhe ilmestyi', year: 1945}, {text: 'Helsingin olympialaiset', year: 1952}, {text: 'Suomi EU:hun', year: 1995}, {text: 'Nokia 3310 julkaistiin', year: 2000}]}
-    ],
-    black: [
-      { q: 'Kuinka monta minuuttia kestää virallinen Cooperin testi?', ans: 12 },
-      { q: 'Montako olutta mahtuu perinteiseen "mäyräkoiraan"?', ans: 6 },
-      { q: 'Vuosi, jolloin Titanic upposi Atlantilla:', ans: 1912 },
-      { q: 'Kuinka monta astetta on suorassa kulmassa?', ans: 90 }
-    ]
-  };
+  function TacticalBoard({ cells, players, activePlayerId }) {
+    const width = 480;
+    const height = 780;
+
+    return (
+            <div className="relative flex flex-col items-center justify-center bg-gray-900/90 p-4 md:p-6 rounded-3xl border border-gray-800 shadow-2xl radar-grid">
+              <div className="w-full flex items-center justify-between mb-4 border-b border-gray-800 pb-3">
+                <div className="flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+                  <h2 className="text-xs font-mono font-bold tracking-widest text-gray-300 uppercase">
+                    RINTAMAKARTTA (18 SEKTORIKENTTÄÄ)
+                  </h2>
+                </div>
+                <span className="text-[10px] font-mono text-gray-400 bg-gray-800/80 px-2 py-1 rounded border border-gray-700">
+            SEKTORI: 01 - 18
+          </span>
+              </div>
+
+              <svg width={width} height={height} className="overflow-visible max-w-full h-auto bg-gray-950/70 rounded-2xl border border-gray-800/80 shadow-inner">
+                <defs>
+                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                </defs>
+
+                {cells.map((cell, idx) => {
+                  if (idx === 0) return null;
+                  const prevCell = cells[idx - 1];
+                  return (
+                          <line
+                                  key={`path-${cell.id}`}
+                                  x1={prevCell.x}
+                                  y1={prevCell.y}
+                                  x2={cell.x}
+                                  y2={cell.y}
+                                  stroke="#374151"
+                                  strokeWidth="4"
+                                  strokeLinecap="round"
+                                  strokeDasharray={cell.isCheckpoint ? "6 6" : "none"}
+                          />
+                  );
+                })}
+
+                <g transform={`translate(${cells[0]?.x || 240}, ${(cells[0]?.y || 700) + 48})`}>
+                  <rect x="-55" y="-14" width="110" height="28" rx="6" fill="#1f2937" stroke="#4b5563" strokeWidth="1.5" />
+                  <text x="0" y="4" textAnchor="middle" fill="#9ca3af" fontSize="11" fontWeight="800" fontFamily="JetBrains Mono, monospace">
+                    LÄHTÖ / START
+                  </text>
+                </g>
+
+                <g transform={`translate(240, 30)`}>
+                  <rect x="-65" y="-18" width="130" height="34" rx="8" fill="#064e3b" stroke="#10b981" strokeWidth="2" filter="url(#glow)"/>
+                  <text x="0" y="4" textAnchor="middle" fill="#6ee7b7" fontSize="11" fontWeight="800" letterSpacing="1" fontFamily="JetBrains Mono, monospace">
+                    TAVOITE / MAALI 🏆
+                  </text>
+                </g>
+
+                {cells.map((cell) => {
+                  const cat = CATEGORY_DATA[cell.category];
+                  const radius = cell.isCheckpoint ? 18 : 14;
+
+                  return (
+                          <g key={cell.id} className="cursor-pointer group">
+                            {cell.isCheckpoint && (
+                                    <circle
+                                            cx={cell.x}
+                                            cy={cell.y}
+                                            r={radius + 5}
+                                            fill="none"
+                                            stroke={cat.color}
+                                            strokeWidth="1.5"
+                                            opacity="0.6"
+                                    />
+                            )}
+                            <circle
+                                    cx={cell.x}
+                                    cy={cell.y}
+                                    r={radius}
+                                    fill={cat.color}
+                                    stroke="#111827"
+                                    strokeWidth="3"
+                                    className="transition-transform duration-200 group-hover:scale-125"
+                            />
+                            <text
+                                    x={cell.x}
+                                    y={cell.y + 4}
+                                    textAnchor="middle"
+                                    fill="#030712"
+                                    fontSize="10"
+                                    fontWeight="900"
+                                    fontFamily="JetBrains Mono, monospace"
+                                    pointerEvents="none"
+                            >
+                              {cell.id}
+                            </text>
+                          </g>
+                  );
+                })}
+
+                {players.map((player) => {
+                  const currentCell = cells.find(c => c.id === player.position) || cells[0];
+                  const isCurrentTurn = player.id === activePlayerId;
+                  const offsetX = (player.id === 1) ? -12 : 12;
+
+                  return (
+                          <g
+                                  key={player.id}
+                                  transform={`translate(${currentCell.x + offsetX}, ${currentCell.y - 2})`}
+                                  className="transition-all duration-500 ease-in-out"
+                          >
+                            {isCurrentTurn && (
+                                    <circle r="18" fill="none" stroke={player.color} strokeWidth="2" opacity="0.8">
+                                      <animate attributeName="r" values="14;22;14" dur="1.8s" repeatCount="indefinite" />
+                                      <animate attributeName="opacity" values="0.9;0.2;0.9" dur="1.8s" repeatCount="indefinite" />
+                                    </circle>
+                            )}
+                            <circle
+                                    r="12"
+                                    fill={player.color}
+                                    stroke="#030712"
+                                    strokeWidth="2.5"
+                                    className="shadow-lg"
+                            />
+                            <text
+                                    y="4"
+                                    textAnchor="middle"
+                                    fill="#ffffff"
+                                    fontSize="10"
+                                    fontWeight="900"
+                                    fontFamily="JetBrains Mono, monospace"
+                            >
+                              P{player.id}
+                            </text>
+                          </g>
+                  );
+                })}
+              </svg>
+            </div>
+    );
+  }
 
   function App() {
+    const [cells] = useState(generateBoardCells());
+    const [questions, setQuestions] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [statusMessage, setStatusMessage] = useState('Haetaan ja käännetään kysymyksiä suomeksi...');
+
     const [players, setPlayers] = useState([
-      { id: 1, name: 'Alfa Joukkue', color: '#38bdf8', score: 0, stage: 0 },
-      { id: 2, name: 'Bravo Joukkue', color: '#f43f5e', score: 0, stage: 0 }
+      { id: 1, name: 'Alfa Joukkue', color: '#38bdf8', position: 1, score: 0 },
+      { id: 2, name: 'Bravo Joukkue', color: '#f43f5e', position: 1, score: 0 },
     ]);
-    const [activePlayerIdx, setActivePlayerIdx] = useState(0);
-    const [activeChallenge, setActiveChallenge] = useState(null);
-    const [selectedPath, setSelectedPath] = useState(null);
+    const [activePlayerIndex, setActivePlayerIndex] = useState(0);
+    const [usedQuestionIds, setUsedQuestionIds] = useState([]);
+
+    const [activeQuizModal, setActiveQuizModal] = useState(null);
+    const [selectedOption, setSelectedOption] = useState(null);
     const [feedback, setFeedback] = useState(null);
     const [winner, setWinner] = useState(null);
 
-    // Numerovisailun tila
-    const [numGuess, setNumGuess] = useState('');
-    // Chrono-järjestyksen tila
-    const [chronoOrder, setChronoOrder] = useState([]);
+    const activePlayer = players[activePlayerIndex];
 
-    const activePlayer = players[activePlayerIdx];
-
-    // Generoidaan satunnaiset 2-3 haaraa seuraavalle etapille
-    const getNextBranches = (stage) => {
-      if (stage >= 5) return []; // Maali
-      const types = ['yellow', 'red', 'black'];
-      const sizes = ['small', 'medium', 'large'];
-
-      const count = Math.random() > 0.5 ? 3 : 2;
-      const branches = [];
-      for (let i = 0; i < count; i++) {
-        const type = types[Math.floor(Math.random() * types.length)];
-        const size = sizes[Math.floor(Math.random() * sizes.length)];
-        branches.push({ id: i, type, size, label: `${NODE_TYPES[type].name} (${SIZES[size].name})` });
-      }
-      return branches;
-    };
-
-    const [currentBranches, setCurrentBranches] = useState(getNextBranches(0));
-
-    const handleSelectBranch = (branch) => {
-      setSelectedPath(branch);
-      // Valmistellaan haaste tyypin ja koon mukaan
-      if (branch.type === 'yellow') {
-        const pool = QUESTIONS_BANK.yellow;
-        const q = pool[Math.floor(Math.random() * pool.length)];
-        setActiveChallenge({ type: 'yellow', size: branch.size, data: q });
-      } else if (branch.type === 'red') {
-        const count = branch.size === 'small' ? 2 : branch.size === 'medium' ? 3 : 4;
-        const poolItem = QUESTIONS_BANK.red.find(item => item.events.length === count) || QUESTIONS_BANK.red[0];
-        // Sekoitetaan tapahtumat satunnaisesti
-        const shuffled = [...poolItem.events].sort(() => Math.random() - 0.5);
-        setActiveChallenge({ type: 'red', size: branch.size, data: { original: poolItem.events, shuffled } });
-        setChronoOrder(shuffled);
-      } else if (branch.type === 'black') {
-        const pool = QUESTIONS_BANK.black;
-        const q = pool[Math.floor(Math.random() * pool.length)];
-        const startPoints = branch.size === 'small' ? 30 : branch.size === 'medium' ? 20 : 10;
-        setActiveChallenge({ type: 'black', size: branch.size, data: q, points: startPoints });
-        setNumGuess('');
+    // Apufunktio tekstin kääntämiseen suomeksi lennossa
+    const translateText = async (text) => {
+      try {
+        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fi&dt=t&q=${encodeURIComponent(text)}`);
+        const json = await res.json();
+        return json[0][0][0];
+      } catch (e) {
+        return text; // Palauttaa alkuperäisen jos käännös epäonnistuu
       }
     };
 
-    // Tarkistukset
-    const submitYellow = (optionIdx) => {
-      const isCorrect = optionIdx === activeChallenge.data.correct;
-      resolveChallenge(isCorrect, 150);
-    };
+    // Hakee kysymykset netistä ja kääntää ne automaattisesti suomeksi
+    const fetchAndTranslateQuestions = async () => {
+      setIsLoading(true);
+      setStatusMessage('Haetaan tuoreita verkkokysymyksiä...');
 
-    const submitChrono = () => {
-      // Tarkistetaan onko vuosiluvut nousevassa järjestyksessä
-      let isCorrect = true;
-      for (let i = 0; i < chronoOrder.length - 1; i++) {
-        if (chronoOrder[i].year > chronoOrder[i+1].year) isCorrect = false;
-      }
-      resolveChallenge(isCorrect, 200);
-    };
+      try {
+        const response = await fetch('https://the-trivia-api.com/v2/questions?limit=20');
+        const data = await response.json();
 
-    const submitNumber = () => {
-      const val = parseInt(numGuess, 10);
-      if (isNaN(val)) return;
-      const actual = activeChallenge.data.ans;
+        if (data && Array.isArray(data)) {
+          setStatusMessage('Käännetään kysymyksiä suomeksi...');
+          const categories = ['yleistieto', 'historia', 'maantieto', 'biologia', 'urheilu'];
+          let globalId = 1;
 
-      if (val < actual) {
-        // Liian pieni -> polku sulkeutuu välittömästi!
-        setFeedback({ type: 'error', message: `LIIAN PIENI! (Oikea: ${actual}). Polku sortui ja sulkeutui! ❌` });
-        setTimeout(() => nextTurn(false), 2000);
-      } else if (val === actual) {
-        setFeedback({ type: 'success', message: 'TARKKA OSUMA! MAHTavaa! 🎯' });
-        setTimeout(() => nextTurn(true, 300), 1600);
-      } else {
-        // Liian suuri -> vähennetään erotus pisteistä
-        const diff = val - actual;
-        const remaining = activeChallenge.points - diff;
-        if (remaining <= 0) {
-          setFeedback({ type: 'error', message: `Veikkaus heitti ${diff} ohi, pisteet loppuivat! Polku sulkeutui. ❌` });
-          setTimeout(() => nextTurn(false), 2000);
+          const formatted = [];
+          for (let i = 0; i < data.length; i++) {
+            const q = data[i];
+            const assignedCategory = categories[i % categories.length];
+
+            // Käännetään kysymys ja vaihtoehdot suomeksi
+            const translatedQuestion = await translateText(q.question.text);
+            const translatedCorrect = await translateText(q.correctAnswer);
+
+            const translatedIncorrect = [];
+            for (const inc of q.incorrectAnswers) {
+              translatedIncorrect.push(await translateText(inc));
+            }
+
+            const options = [...translatedIncorrect, translatedCorrect].sort(() => Math.random() - 0.5);
+            const correctIndex = options.indexOf(translatedCorrect);
+
+            formatted.push({
+              id: globalId++,
+              category: assignedCategory,
+              question: translatedQuestion,
+              options,
+              correctIndex
+            });
+          }
+
+          setQuestions(formatted);
+          setStatusMessage(`Ladattu ja käännetty ${formatted.length} kysymystä suomeksi! 🇫🇮🌐`);
         } else {
-          setFeedback({ type: 'success', message: `Yläkanttiin meni (${diff} ohi), mutta selvisit hengissä ${remaining} pisteellä! 🎖️` });
-          setTimeout(() => nextTurn(true, 100), 1800);
+          throw new Error('Virheellinen data');
         }
+      } catch (err) {
+        console.error('Verkkohaku/käännös epäonnistui', err);
+        setQuestions([
+          { id: 1, category: 'yleistieto', question: 'Mikä on Suomen pääkaupunki?', options: ['Turku', 'Helsinki', 'Tampere', 'Oulu'], correctIndex: 1 },
+          { id: 2, category: 'historia', question: 'Minä vuonna Suomi itsenäistyi?', options: ['1917', '1918', '1939', '1945'], correctIndex: 0 },
+          { id: 3, category: 'maantieto', question: 'Mikä on maailman pisin joki?', options: ['Amazonjoki', 'Niili', 'Mississippi', 'Jangtse'], correctIndex: 1 },
+          { id: 4, category: 'biologia', question: 'Mikä eläin on sinivalas?', options: ['Kala', 'Nisäkäs', 'Matelija', 'Lintu'], correctIndex: 1 },
+          { id: 5, category: 'urheilu', question: 'Kuinka monta pelaajaa on jääkiekkojoukkueella kentällä?', options: ['5', '6', '4', '7'], correctIndex: 0 }
+        ]);
+        setStatusMessage('Käytetään suomenkielistä offline-pankkia.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    const resolveChallenge = (isCorrect, rewardScore) => {
-      if (isCorrect) {
-        setFeedback({ type: 'success', message: 'OIKEIN! HAARA VALLATTU JA ETENEMINEN VAHVISTETTU! 🎖️' });
-        setTimeout(() => nextTurn(true, rewardScore), 1500);
-      } else {
-        setFeedback({ type: 'error', message: 'VÄÄRIN! Polku sulkeutuu ja umpeutuu. ❌' });
-        setTimeout(() => nextTurn(false), 1800);
+    useEffect(() => {
+      fetchAndTranslateQuestions();
+    }, []);
+
+    const handleInitiateMove = () => {
+      if (winner || activeQuizModal || isLoading || questions.length === 0) return;
+
+      const targetPos = activePlayer.position + 1;
+      if (targetPos > cells.length) return;
+
+      const targetCell = cells.find(c => c.id === targetPos);
+      if (!targetCell) return;
+
+      let available = questions.filter(
+              q => q.category === targetCell.category && !usedQuestionIds.includes(q.id)
+      );
+
+      if (available.length === 0) {
+        available = questions.filter(q => !usedQuestionIds.includes(q.id));
       }
-    };
 
-    const nextTurn = (success, scoreAdd = 0) => {
-      setPlayers(prev => prev.map((p, idx) => {
-        if (idx === activePlayerIdx) {
-          const newStage = success ? p.stage + 1 : p.stage;
-          const newScore = p.score + (success ? scoreAdd : 0);
-          const updated = { ...p, stage: newStage, score: newScore };
-          if (newStage >= 5) setWinner(updated);
-          return updated;
-        }
-        return p;
-      }));
+      if (available.length === 0) {
+        setUsedQuestionIds([]);
+        available = questions;
+      }
 
-      setActiveChallenge(null);
-      setSelectedPath(null);
+      const randomQuestion = available[Math.floor(Math.random() * available.length)];
+      setUsedQuestionIds(prev => [...prev, randomQuestion.id]);
+
+      setSelectedOption(null);
       setFeedback(null);
-      setCurrentBranches(getNextBranches(activePlayer.stage + (success ? 1 : 0)));
-      setActivePlayerIdx(prev => (prev + 1) % players.length);
+      setActiveQuizModal({
+        player: activePlayer,
+        targetPosition: targetPos,
+        targetCell: targetCell,
+        question: randomQuestion
+      });
+    };
+
+    const handleAnswerSubmit = (optionIndex) => {
+      if (!activeQuizModal || feedback !== null) return;
+
+      setSelectedOption(optionIndex);
+      const isCorrect = optionIndex === activeQuizModal.question.correctIndex;
+
+      if (isCorrect) {
+        setFeedback({
+          type: 'success',
+          message: 'OIKEIN! SEKTORI VALLATTU. ETENEMINEN VAHVISTETTU! 🎖️'
+        });
+
+        setTimeout(() => {
+          const newPos = activeQuizModal.targetPosition;
+
+          setPlayers(prevPlayers => prevPlayers.map(p => {
+            if (p.id === activePlayer.id) {
+              const updated = { ...p, position: newPos, score: p.score + 150 };
+              if (newPos >= cells.length) {
+                setWinner(updated);
+              }
+              return updated;
+            }
+            return p;
+          }));
+
+          setActiveQuizModal(null);
+          setFeedback(null);
+          setSelectedOption(null);
+          setActivePlayerIndex((prev) => (prev + 1) % players.length);
+        }, 1400);
+
+      } else {
+        const correctText = activeQuizModal.question.options[activeQuizModal.question.correctIndex];
+        setFeedback({
+          type: 'error',
+          message: `VÄÄRIN! HYÖKKÄYS TORJUTTU. Oikea vastaus oli: ${correctText}`
+        });
+
+        setTimeout(() => {
+          setActiveQuizModal(null);
+          setFeedback(null);
+          setSelectedOption(null);
+          setActivePlayerIndex((prev) => (prev + 1) % players.length);
+        }, 2200);
+      }
     };
 
     const resetGame = () => {
       setPlayers([
-        { id: 1, name: 'Alfa Joukkue', color: '#38bdf8', score: 0, stage: 0 },
-        { id: 2, name: 'Bravo Joukkue', color: '#f43f5e', score: 0, stage: 0 }
+        { id: 1, name: 'Alfa Joukkue', color: '#38bdf8', position: 1, score: 0 },
+        { id: 2, name: 'Bravo Joukkue', color: '#f43f5e', position: 1, score: 0 },
       ]);
-      setActivePlayerIdx(0);
-      setActiveChallenge(null);
-      setSelectedPath(null);
+      setActivePlayerIndex(0);
+      setUsedQuestionIds([]);
+      setActiveQuizModal(null);
       setWinner(null);
       setFeedback(null);
-      setCurrentBranches(getNextBranches(0));
+      fetchAndTranslateQuestions(); // Hakee ja kääntää uudet kysymykset netistä
     };
 
-    return e('div', { className: 'min-h-screen flex flex-col justify-between p-3 md:p-6 max-w-5xl mx-auto w-full text-white' },
-            e('header', { className: 'flex flex-col md:flex-row items-center justify-between border-b border-gray-800 pb-4 mb-6 gap-4' },
-                    e('div', { className: 'flex items-center gap-3' },
-                            e('div', { className: 'w-10 h-10 rounded-xl bg-indigo-600/25 border border-indigo-500/40 flex items-center justify-center text-xl font-black text-indigo-400 font-mono shadow-lg' }, '🎯'),
-                            e('div', null,
-                                    e('h1', { className: 'text-xl md:text-2xl font-black tracking-tight text-white uppercase font-mono' }, 'TACTICAL TRIVIAL PURSUIT — HAARAUTUVAT POLUT'),
-                                    e('p', { className: 'text-xs text-gray-400 font-medium' }, 'Esa Kujalan taktiset säännöt 🇫🇮')
-                            )
-                    ),
-                    e('div', { className: 'bg-gray-900 border border-gray-800 px-4 py-2 rounded-xl text-xs font-mono flex items-center gap-3' },
-                            e('span', { className: 'text-gray-400' }, 'VUOROSSA:'),
-                            e('strong', { style: { color: activePlayer.color } }, activePlayer.name)
-                    )
-            ),
+    return (
+            <div className="min-h-screen flex flex-col justify-between p-3 md:p-6 max-w-7xl mx-auto w-full">
+              <header className="flex flex-col md:flex-row items-center justify-between border-b border-gray-800 pb-4 mb-6 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-xl font-black text-indigo-400 font-mono shadow-lg">
+                    🎯
+                  </div>
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-black tracking-tight text-white uppercase font-mono">
+                      TACTICAL TRIVIAL PURSUIT
+                    </h1>
+                    <p className="text-xs text-gray-400 font-medium">
+                      Verkkokysymykset käännettynä suomeksi 🇫🇮
+                    </p>
+                  </div>
+                </div>
 
-            e('main', { className: 'grid grid-cols-1 md:grid-cols-12 gap-6 items-start my-auto' },
-                    // Kartta / Polut
-                    e('div', { className: 'md:col-span-6 bg-gray-900/90 border border-gray-800 p-6 rounded-3xl shadow-xl flex flex-col gap-5 radar-grid' },
-                            e('h2', { className: 'text-xs font-mono font-bold tracking-widest text-gray-300 uppercase border-b border-gray-800 pb-3' }, 'RINTAMAPOLKU (ETAISYYS MAALIIN 5 VAIHETTA)'),
+                <div className="flex items-center gap-3 bg-gray-900 border border-gray-800 px-4 py-2 rounded-xl text-xs font-mono">
+                  <span className="text-gray-400">VUOROSSA:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: activePlayer.color }}></span>
+                    <span className="font-bold text-white">{activePlayer.name}</span>
+                  </div>
+                </div>
+              </header>
 
-                            e('div', { className: 'flex flex-col gap-4' },
-                                    players.map(p =>
-                                            e('div', { key: p.id, className: 'bg-gray-950 p-4 rounded-2xl border border-gray-800 flex items-center justify-between' },
-                                                    e('div', { className: 'flex items-center gap-3' },
-                                                            e('span', { className: 'w-4 h-4 rounded-full', style: { backgroundColor: p.color } }),
-                                                            e('span', { className: 'font-bold text-sm' }, p.name)
-                                                    ),
-                                                    e('div', { className: 'font-mono text-xs flex items-center gap-4' },
-                                                            e('span', { className: 'text-amber-400 font-bold' }, p.score + ' PTS'),
-                                                            e('span', { className: 'text-indigo-400 font-bold' }, `Vaihe ${p.stage} / 5`)
-                                                    )
-                                            )
-                                    )
-                            ),
+              <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start my-auto">
+                <div className="lg:col-span-7 flex justify-center w-full">
+                  <TacticalBoard cells={cells} players={players} activePlayerId={activePlayer.id} />
+                </div>
 
-                            // Valintaikkuna seuraavasta haarasta
-                            !activeChallenge && e('div', { className: 'bg-gray-950 p-5 rounded-2xl border border-gray-800 flex flex-col gap-3' },
-                                    e('span', { className: 'text-xs font-mono text-indigo-400 font-bold uppercase' }, 'Valitse seuraava polku:'),
-                                    e('div', { className: 'grid grid-cols-1 gap-2' },
-                                            current.map = currentBranches.map(branch => {
-                                              const nodeInfo = NODE_TYPES[branch.type];
-                                              const sizeInfo = SIZES[branch.size];
-                                              return e('button', {
-                                                        key: branch.id,
-                                                        onClick: () => handleSelectBranch(branch),
-                                                        className: 'p-3 rounded-xl border border-gray-700 bg-gray-900 hover:bg-gray-800 flex items-center justify-between text-xs font-mono cursor-pointer transition-all'
-                                                      },
-                                                      e('div', { className: 'flex items-center gap-2.5' },
-                                                              e('span', { className: 'w-4 h-4 rounded-full border border-white/40', style: { backgroundColor: nodeInfo.color } }),
-                                                              e('span', { className: 'font-bold text-white' }, nodeInfo.name)
-                                                      ),
-                                                      e('span', { className: 'text-gray-400 bg-gray-950 px-2 py-1 rounded border border-gray-800' }, sizeInfo.name)
-                                              );
-                                            })
-                                    )
-                            )
-                    ),
+                <div className="lg:col-span-5 flex flex-col gap-5 w-full">
+                  <div className="bg-gray-900/90 border border-gray-800 rounded-3xl p-6 shadow-xl flex flex-col gap-5 radar-grid">
+                    <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                      <h3 className="text-sm font-extrabold uppercase text-gray-200 tracking-wider font-mono flex items-center gap-2">
+                        <span>🎮</span> KOMENTOKESKUS
+                      </h3>
+                      <span className="text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded">
+                  {isLoading ? 'KÄÄNETÄÄN...' : 'SUOMI-API AKTIIVINEN 🇫🇮'}
+                </span>
+                    </div>
 
-                    // Aktiivinen visailu / haaste paneeli
-                    e('div', { className: 'md:col-span-6 bg-gray-900/90 border border-gray-800 p-6 rounded-3xl shadow-xl flex flex-col gap-5' },
-                            e('h2', { className: 'text-xs font-mono font-bold tracking-widest text-gray-300 uppercase border-b border-gray-800 pb-3' }, 'TAKTINEN TEHTÄVÄRUUTU'),
+                    <div className="bg-gray-950 p-4 rounded-2xl border border-gray-800 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-4 h-4 rounded-full shadow" style={{ backgroundColor: activePlayer.color }}></div>
+                          <span className="font-bold text-base text-white">{activePlayer.name}</span>
+                        </div>
+                        <span className="text-xs font-mono font-bold bg-gray-900 border border-gray-700 text-amber-400 px-2.5 py-1 rounded-lg">
+                    {activePlayer.score} PTS
+                  </span>
+                      </div>
 
-                            activeChallenge ? e('div', { className: 'flex flex-col gap-4' },
-                                    // Keltainen standardi
-                                    activeChallenge.type === 'yellow' && e('div', { className: 'flex flex-col gap-4' },
-                                            e('div', { className: 'bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl' },
-                                                    e('span', { className: 'text-[10px] font-mono text-yellow-400 font-bold uppercase block mb-1' }, 'KELTAINEN • STANDARDI'),
-                                                    e('p', { className: 'text-base font-bold text-white' }, activeChallenge.data.q)
-                                            ),
-                                            e('div', { className: 'grid grid-cols-1 gap-2' },
-                                                    activeChallenge.data.options.map((opt, idx) =>
-                                                            e('button', {
-                                                              key: idx,
-                                                              onClick: () => submitYellow(idx),
-                                                              disabled: feedback !== null,
-                                                              className: 'p-3 bg-gray-800 hover:bg-yellow-600/40 rounded-xl font-semibold text-xs border border-gray-700 text-left cursor-pointer transition-all'
-                                                            }, opt)
-                                                    )
-                                            )
-                                    ),
+                      <div className="text-[11px] font-mono text-gray-400 bg-gray-900 px-3 py-1.5 rounded-xl border border-gray-800">
+                        {statusMessage}
+                      </div>
 
-                                    // Punainen chrono
-                                    activeChallenge.type === 'red' && e('div', { className: 'flex flex-col gap-4' },
-                                            e('div', { className: 'bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl' },
-                                                    e('span', { className: 'text-[10px] font-mono text-rose-400 font-bold uppercase block mb-1' }, 'PUNAINEN • CHRONO (Järjestä aikajärjestykseen vanhimmasta uusimpaan)'),
-                                                    e('p', { className: 'text-xs text-gray-300 mb-2' }, 'Raahaa tai siirrä tapahtumia oikeaan järjestykseen:'),
-                                            ),
-                                            e('div', { className: 'flex flex-col gap-2' },
-                                                    chronoOrder.map((ev, idx) =>
-                                                            e('div', { key: idx, className: 'flex items-center justify-between bg-gray-950 p-3 rounded-xl border border-gray-800 text-xs font-mono' },
-                                                                    e('span', null, `${idx + 1}. ${ev.text}`),
-                                                                    e('div', { className: 'flex gap-1' },
-                                                                            e('button', { onClick: () => {
-                                                                                if (idx > 0) {
-                                                                                  const copy = [...chronoOrder];
-                                                                                  const temp = copy[idx]; copy[idx] = copy[idx-1]; copy[idx-1] = temp;
-                                                                                  setChronoOrder(copy);
-                                                                                }
-                                                                              }, className: 'px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded cursor-pointer' }, '⬆️'),
-                                                                            e('button', { onClick: () => {
-                                                                                if (idx < chronoOrder.length - 1) {
-                                                                                  const copy = [...chronoOrder];
-                                                                                  const temp = copy[idx]; copy[idx] = copy[idx+1]; copy[idx+1] = temp;
-                                                                                  setChronoOrder(copy);
-                                                                                }
-                                                                              }, className: 'px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded cursor-pointer' }, '⬇️')
-                                                                    )
-                                                            )
-                                                    )
-                                            ),
-                                            e('button', {
-                                              onClick: submitChrono,
-                                              disabled: feedback !== null,
-                                              className: 'py-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase rounded-xl cursor-pointer shadow'
-                                            }, 'VAHVISTA AIKAJÄRJESTYS')
-                                    ),
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono mt-1">
+                        <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800">
+                          <span className="text-gray-400 block text-[10px]">NYKYINEN SEKTORI</span>
+                          <span className="text-white font-bold text-sm">SEKTORI {activePlayer.position} / 18</span>
+                        </div>
+                        <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800">
+                          <span className="text-gray-400 block text-[10px]">SEURAAVA SEKTORI</span>
+                          <span className="text-indigo-400 font-bold text-sm">
+                      {activePlayer.position < 18 ? `SEKTORI ${activePlayer.position + 1}` : 'MAALI'}
+                    </span>
+                        </div>
+                      </div>
+                    </div>
 
-                                    // Musta numerovisailu
-                                    activeChallenge.type === 'black' && e('div', { className: 'flex flex-col gap-4' },
-                                            e('div', { className: 'bg-slate-800 border border-slate-700 p-4 rounded-2xl' },
-                                                    e('span', { className: 'text-[10px] font-mono text-slate-300 font-bold uppercase block mb-1' }, `MUSTA • NUMEROVISAILU (Pistebudjetti: ${activeChallenge.points} PTS)`),
-                                                    e('p', { className: 'text-sm font-bold text-white mt-1' }, activeChallenge.data.q)
-                                            ),
-                                            e('input', {
-                                              type: 'number',
-                                              value: numGuess,
-                                              onChange: (e) => setNumGuess(e.target.value),
-                                              placeholder: 'Kirjoita arvioitu luku...',
-                                              className: 'p-3 bg-gray-950 border border-gray-800 rounded-xl text-white font-mono text-sm'
-                                            }),
-                                            e('button', {
-                                              onClick: submitNumber,
-                                              disabled: feedback !== null || numGuess === '',
-                                              className: 'py-3 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase rounded-xl cursor-pointer shadow'
-                                            }, 'LÄHETÄ ARVAUS')
-                                    ),
+                    <button
+                            onClick={handleInitiateMove}
+                            disabled={winner !== null || isLoading || questions.length === 0}
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 text-white font-black text-sm uppercase tracking-wider rounded-2xl transition-all duration-200 transform active:scale-98 shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-3 cursor-pointer border border-indigo-400/30"
+                    >
+                      <span>{isLoading ? 'LADATAAN...' : 'ETENE SEURAAVAAN SEKTORIIN'}</span>
+                      <span className="text-lg">➔</span>
+                    </button>
 
-                                    feedback && e('div', { className: `p-4 rounded-2xl text-center text-xs font-mono font-bold ${feedback.type === 'success' ? 'bg-emerald-950 border border-emerald-500 text-emerald-200' : 'bg-rose-950 border border-rose-500 text-rose-200'}` },
-                                            feedback.message
-                                    )
-                            ) : e('div', { className: 'bg-gray-950 p-8 rounded-2xl border border-gray-800 text-center text-xs font-mono text-gray-400' },
-                                    'Valitse vasemmalta haara aloittaaksesi vuoron.'
-                            )
-                    )
-            ),
+                    <div className="space-y-2 mt-2">
+                <span className="text-[11px] font-mono text-gray-400 uppercase tracking-widest block mb-2">
+                  JOUKKUEIDEN TILA:
+                </span>
+                      {players.map((p) => {
+                        const isActive = p.id === activePlayer.id;
+                        return (
+                                <div
+                                        key={p.id}
+                                        className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                                                isActive
+                                                        ? 'bg-gray-800/90 border-indigo-500/50 text-white shadow'
+                                                        : 'bg-gray-950/60 border-gray-800/80 text-gray-400'
+                                        }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></span>
+                                    <span className="font-bold">{p.name}</span>
+                                    {isActive && (
+                                            <span className="text-[9px] bg-indigo-500 text-white font-bold px-1.5 py-0.2 rounded font-mono">
+                            VUORO
+                          </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 font-mono">
+                                    <span>Sektorilla: <strong>{p.position}</strong></span>
+                                    <span className="text-amber-400 font-bold">{p.score} p</span>
+                                  </div>
+                                </div>
+                        );
+                      })}
+                    </div>
 
-            winner && e('div', { className: 'fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50' },
-                    e('div', { className: 'bg-gray-900 border-2 border-emerald-500 rounded-3xl p-8 w-full max-w-md text-center flex flex-col gap-6' },
-                            e('h2', { className: 'text-2xl font-black uppercase font-mono text-white' }, `VOITTO SAAVUTETTU! 🏆\n${winner.name} hallitsee rintamaa!`),
-                            e('button', { onClick: resetGame, className: 'py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase rounded-2xl cursor-pointer' }, 'UUSI PELI')
-                    )
-            )
+                    <button
+                            onClick={resetGame}
+                            disabled={isLoading}
+                            className="mt-2 py-2.5 text-xs font-mono font-semibold text-gray-400 hover:text-white bg-gray-950 hover:bg-gray-800 rounded-xl border border-gray-800 transition-colors cursor-pointer"
+                    >
+                      HAE JA KÄÄNNÄ UUDET KYSYMYKSET NETISTÄ
+                    </button>
+                  </div>
+
+                  <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-4 text-xs">
+              <span className="font-mono font-bold text-gray-300 uppercase block mb-3 text-[11px]">
+                KATEGORIAT & VÄRIKOODIT
+              </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                      {Object.entries(CATEGORY_DATA).map(([key, cat]) => (
+                              <div key={key} className="flex items-center gap-2 bg-gray-950 p-2 rounded-lg border border-gray-800">
+                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }}></span>
+                                <span className="text-gray-300 truncate">{cat.name}</span>
+                              </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </main>
+
+              <footer className="mt-8 pt-4 border-t border-gray-800/80 text-center text-xs text-gray-400 font-mono">
+                Tactical Trivial Pursuit — Rintamataktiikka &amp; Tieto
+              </footer>
+
+              {activeQuizModal && (
+                      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                        <div className="bg-gray-900 border-2 border-gray-700 rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-2xl modal-animate-in flex flex-col gap-6 relative">
+                          <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+                            <div className="flex items-center gap-3">
+                  <span
+                          className="w-4 h-4 rounded-full shadow-md"
+                          style={{ backgroundColor: CATEGORY_DATA[activeQuizModal.question.category].color }}
+                  />
+                              <span className="text-sm font-mono font-extrabold uppercase tracking-widest text-white">
+                    KATEGORIA: {CATEGORY_DATA[activeQuizModal.question.category].name}
+                  </span>
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-950 px-3 py-1.5 rounded-xl border border-gray-800 text-xs font-mono">
+                              <span className="text-gray-400">TAVOITETILA:</span>
+                              <span className="text-indigo-400 font-bold">SEKTORI {activeQuizModal.targetPosition}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between bg-gray-950/80 p-3.5 rounded-2xl border border-gray-800/80">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: activeQuizModal.player.color }}></span>
+                              <span className="text-xs text-gray-300 font-medium">Vastausvuorossa:</span>
+                              <strong className="text-sm text-white font-bold">{activeQuizModal.player.name}</strong>
+                            </div>
+                            <span className="text-xs font-mono text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/20 font-bold">
+                  +150 PTS
+                </span>
+                          </div>
+
+                          <div className="bg-gray-950 p-6 rounded-2xl border border-gray-800 shadow-inner">
+                            <p className="text-lg md:text-2xl font-bold text-white leading-relaxed">
+                              {activeQuizModal.question.question}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-3">
+                            {activeQuizModal.question.options.map((optionText, idx) => {
+                              const optionLetters = ['A', 'B', 'C', 'D'];
+                              const isSelected = selectedOption === idx;
+
+                              return (
+                                      <button
+                                              key={idx}
+                                              onClick={() => handleAnswerSubmit(idx)}
+                                              disabled={feedback !== null}
+                                              className={`w-full text-left p-4 rounded-2xl border text-base font-semibold transition-all duration-150 flex items-center justify-between cursor-pointer ${
+                                                      isSelected
+                                                              ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg'
+                                                              : 'bg-gray-800/90 hover:bg-indigo-900/60 border-gray-700 hover:border-indigo-500/80 text-gray-100'
+                                              } disabled:cursor-not-allowed`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-xl text-xs font-mono font-bold flex items-center justify-center shrink-0 ${
+                                isSelected ? 'bg-white text-indigo-900' : 'bg-gray-900 text-gray-300 border border-gray-700'
+                        }`}>
+                          {optionLetters[idx]}
+                        </span>
+                                          <span className="text-base md:text-lg">{optionText}</span>
+                                        </div>
+                                        <span className="text-xs font-mono text-gray-400 opacity-60">VALITSE</span>
+                                      </button>
+                              );
+                            })}
+                          </div>
+
+                          {feedback && (
+                                  <div className={`p-4 rounded-2xl text-center text-sm font-extrabold tracking-wide font-mono transition-all modal-animate-in ${
+                                          feedback.type === 'success'
+                                                  ? 'bg-emerald-950 border-2 border-emerald-500 text-emerald-200'
+                                                  : 'bg-rose-950 border-2 border-rose-500 text-rose-200'
+                                  }`}>
+                                    {feedback.message}
+                                  </div>
+                          )}
+                        </div>
+                      </div>
+              )}
+
+              {winner && (
+                      <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+                        <div className="bg-gray-900 border-2 border-emerald-500/60 rounded-3xl p-8 w-full max-w-md shadow-2xl modal-animate-in flex flex-col items-center text-center gap-6">
+                          <div className="w-20 h-20 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-4xl shadow-lg">
+                            🏆
+                          </div>
+                          <div>
+                <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-widest block mb-1">
+                  TEHTÄVÄ SUORITETTU
+                </span>
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tight font-mono">
+                              VOITTO SAAVUTETTU!
+                            </h2>
+                            <p className="text-gray-300 text-sm mt-2">
+                              <strong className="text-emerald-400">{winner.name}</strong> saavutti maalisektorin ensimmäisenä ja hallitsee rintamaa!
+                            </p>
+                          </div>
+
+                          <div className="bg-gray-950 px-6 py-4 rounded-2xl border border-gray-800 w-full flex justify-between items-center text-sm font-mono">
+                            <span className="text-gray-400">LOPPUPISTEET:</span>
+                            <span className="text-emerald-400 font-black text-base">{winner.score} PTS</span>
+                          </div>
+
+                          <button
+                                  onClick={resetGame}
+                                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-600/30"
+                          >
+                            UUSI PELI
+                          </button>
+                        </div>
+                      </div>
+              )}
+            </div>
     );
   }
 
-  ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+  ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 
 </body>
